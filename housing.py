@@ -17,9 +17,17 @@ from sklearn.pipeline import FeatureUnion
 from my_transforms import MyLabelBinarizer
 from sklearn.metrics import mean_squared_error
 from sklearn.tree import DecisionTreeRegressor
+from sklearn.model_selection import cross_val_score
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.model_selection import GridSearchCV
 
 def load_housing_data(housing_path):
     return pd.read_csv(housing_path)
+def display_scores(scores):
+    print("Scores:", scores)
+    print("Mean:", scores.mean())
+    print("Standard deviation:", scores.std())
+
 
 housing = load_housing_data('housing.csv')
 # se divide entre 1.5 para minimizar la extensión de la feature (pasa de 0-15 a 0-10)
@@ -138,4 +146,24 @@ tree_reg.fit(housing_prepared,housing_labels)
 housing_predictions = tree_reg.predict(housing_prepared)
 tree_mse = mean_squared_error(housing_labels,housing_predictions)
 print(np.sqrt(tree_mse))
+
+scores = cross_val_score(tree_reg, housing_prepared, housing_labels, scoring="neg_mean_squared_error", cv=10)
+tree_rmse_scores = np.sqrt(-scores)
+display_scores(tree_rmse_scores)
+
+forest_reg = RandomForestRegressor()
+forest_reg.fit(housing_prepared, housing_labels)
+scores = cross_val_score(forest_reg, housing_prepared, housing_labels, scoring="neg_mean_squared_error", cv=10)
+forest_rmse_scores = np.sqrt(-scores)
+display_scores(forest_rmse_scores)
+
+param_grid = [
+ {'n_estimators': [3, 10, 30], 'max_features': [2, 4, 6, 8]},
+ {'bootstrap': [False], 'n_estimators': [3, 10], 'max_features': [2, 3, 4]},
+ ]
+forest_reg = RandomForestRegressor()
+grid_search = GridSearchCV(forest_reg, param_grid, cv=5, scoring='neg_mean_squared_error')
+grid_search.fit(housing_prepared, housing_labels)
+print(grid_search.best_params_)
+
 
