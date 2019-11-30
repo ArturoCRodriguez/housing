@@ -5,6 +5,18 @@ from sklearn.model_selection import train_test_split
 from sklearn.model_selection import StratifiedShuffleSplit
 from pandas.plotting import scatter_matrix
 from sklearn.preprocessing import Imputer
+from sklearn.preprocessing import LabelEncoder
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.preprocessing import LabelBinarizer
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
+from my_transforms import CombinedAttributesAdder
+from my_transforms import DataFrameSelector
+from sklearn.linear_model import LinearRegression
+from sklearn.pipeline import FeatureUnion
+from my_transforms import MyLabelBinarizer
+from sklearn.metrics import mean_squared_error
+from sklearn.tree import DecisionTreeRegressor
 
 def load_housing_data(housing_path):
     return pd.read_csv(housing_path)
@@ -69,4 +81,61 @@ X = imputer.transform(housing_num) # transformamos el dataset con el modelo obte
 housing_tr = pd.DataFrame(X, columns= housing_num.columns) # le volvemos a poner los headers a X, ya que transform devuelve sólo las filas de datos (plain Numpy array)
 # En este punto, seguimos sin "ocean_proximity"
 # print(housing_tr.info())
+
+encoder = LabelEncoder()
+housing_cat = housing["ocean_proximity"]
+housing_cat_encoded = encoder.fit_transform(housing_cat)
+# print(encoder.classes_)
+
+# encoder = OneHotEncoder()
+# housing_cat_1hot = encoder.fit_transform(housing_cat_encoded.reshape(-1,1)) # devuelve una sparse matrix / matrix dispersa
+# # Una línea de Housing sólo puede tener una categoría. Queremos tener 5 columnas nuevas que representen las 5 categorías
+# # y poner 1 o 0 si el registro tiene esa categoría o no
+# # Como cada registro sólo puede tener una categoría, sólo una columna puede tener el valor 1
+# # La matriz dispersa nos dice dónde está el 1 para cada línea (0,1,2,3 o 4 columna)
+# # print(housing_cat_1hot) 
+# # print(housing_cat_1hot.toarray())
+
+# Con LabelBinarizer podemos hacer todo lo anterior en 1 paso
+encoder = LabelBinarizer()
+housing_cat_1hot = encoder.fit_transform(housing_cat)
+# print(housing_cat_1hot) 
+
+num_pipeline = Pipeline([
+    ('imputer', Imputer(strategy="median")),
+    ('attribs_adder', CombinedAttributesAdder()),
+    ('std_scaler',StandardScaler())
+])
+housing_num_tr = num_pipeline.fit_transform(housing_num)
+# print(housing_num_tr)
+
+
+num_attribs = list(housing_num)
+cat_attribs = ["ocean_proximity"]
+num_pipeline = Pipeline([
+    ('selector', DataFrameSelector(num_attribs)),
+    ('imputer', Imputer(strategy="median")),
+    ('attribs_adder', CombinedAttributesAdder()),
+    ('std_scaler', StandardScaler())
+])
+cat_pipeline = Pipeline([
+    ('selector', DataFrameSelector(cat_attribs)),
+    ('label_binarizer', MyLabelBinarizer())
+])
+full_pipeline = FeatureUnion(transformer_list=[("num_pipeline", num_pipeline),("cat_pipeline", cat_pipeline)])
+
+housing_prepared = full_pipeline.fit_transform(housing)
+# print(housing_prepared.shape)
+lin_reg = LinearRegression()
+lin_reg.fit(housing_prepared, housing_labels)
+housing_predictions = lin_reg.predict(housing_prepared)
+lin_mse = mean_squared_error(housing_labels, housing_predictions)
+lin_rmse = np.sqrt(lin_mse)
+print(lin_rmse)
+
+tree_reg = DecisionTreeRegressor()
+tree_reg.fit(housing_prepared,housing_labels)
+housing_predictions = tree_reg.predict(housing_prepared)
+tree_mse = mean_squared_error(housing_labels,housing_predictions)
+print(np.sqrt(tree_mse))
 
